@@ -4,7 +4,8 @@ import {
     CheckCircle2, ArrowRight, Terminal, Activity,
     GitBranch, Info, ArrowDown,
     Layers, Zap, Rocket, UserCheck,
-    ShieldCheck, Lock, GitMerge, Tag
+    ShieldCheck, Lock, GitMerge, Tag,
+    Webhook, RefreshCw
 } from 'lucide-react';
 
 // ─────────────────────────────────────────────────────────
@@ -12,50 +13,50 @@ import {
 // ─────────────────────────────────────────────────────────
 const GH = {
     // Canvas
-    bgDefault:   '#0d1117',
-    bgOverlay:   '#161b22',
-    bgSubtle:    '#21262d',
-    bgInset:     '#010409',
+    bgDefault: '#0d1117',
+    bgOverlay: '#161b22',
+    bgSubtle: '#21262d',
+    bgInset: '#010409',
 
     // Borders
-    border:      '#30363d',
+    border: '#30363d',
     borderMuted: '#21262d',
 
     // Text
-    fg:          '#e6edf3',
-    fgMuted:     '#8b949e',
-    fgSubtle:    '#6e7681',
-    fgOnEmphasis:'#ffffff',
+    fg: '#e6edf3',
+    fgMuted: '#8b949e',
+    fgSubtle: '#6e7681',
+    fgOnEmphasis: '#ffffff',
 
     // Accent (blue)
-    accent:      '#388bfd',
+    accent: '#388bfd',
     accentMuted: 'rgba(56,139,253,0.15)',
     accentEmphasis: '#1f6feb',
-    accentBorder:'rgba(56,139,253,0.4)',
+    accentBorder: 'rgba(56,139,253,0.4)',
 
     // Success (green)
-    success:        '#3fb950',
-    successMuted:   'rgba(63,185,80,0.15)',
-    successEmphasis:'#238636',
-    successBorder:  'rgba(63,185,80,0.4)',
+    success: '#3fb950',
+    successMuted: 'rgba(63,185,80,0.15)',
+    successEmphasis: '#238636',
+    successBorder: 'rgba(63,185,80,0.4)',
 
     // Attention (amber)
-    attention:        '#d29922',
-    attentionMuted:   'rgba(210,153,34,0.15)',
-    attentionEmphasis:'#9e6a03',
-    attentionBorder:  'rgba(210,153,34,0.4)',
+    attention: '#d29922',
+    attentionMuted: 'rgba(210,153,34,0.15)',
+    attentionEmphasis: '#9e6a03',
+    attentionBorder: 'rgba(210,153,34,0.4)',
 
     // Danger (red)
-    danger:        '#f85149',
-    dangerMuted:   'rgba(248,81,73,0.15)',
-    dangerEmphasis:'#da3633',
-    dangerBorder:  'rgba(248,81,73,0.4)',
+    danger: '#f85149',
+    dangerMuted: 'rgba(248,81,73,0.15)',
+    dangerEmphasis: '#da3633',
+    dangerBorder: 'rgba(248,81,73,0.4)',
 
     // Done (purple)
-    done:        '#bc8cff',
-    doneMuted:   'rgba(188,140,255,0.15)',
-    doneEmphasis:'#8957e5',
-    doneBorder:  'rgba(188,140,255,0.4)',
+    done: '#bc8cff',
+    doneMuted: 'rgba(188,140,255,0.15)',
+    doneEmphasis: '#8957e5',
+    doneBorder: 'rgba(188,140,255,0.4)',
 };
 
 // ─────────────────────────────────────────────────────────
@@ -64,12 +65,12 @@ const GH = {
 
 const Label = ({ color = 'default', children, size = 'sm' }) => {
     const palettes = {
-        default:    { bg: GH.bgSubtle,         border: GH.border,          text: GH.fgMuted },
-        blue:       { bg: GH.accentMuted,       border: GH.accentBorder,    text: GH.accent },
-        green:      { bg: GH.successMuted,      border: GH.successBorder,   text: GH.success },
-        amber:      { bg: GH.attentionMuted,    border: GH.attentionBorder, text: GH.attention },
-        red:        { bg: GH.dangerMuted,       border: GH.dangerBorder,    text: GH.danger },
-        purple:     { bg: GH.doneMuted,         border: GH.doneBorder,      text: GH.done },
+        default: { bg: GH.bgSubtle, border: GH.border, text: GH.fgMuted },
+        blue: { bg: GH.accentMuted, border: GH.accentBorder, text: GH.accent },
+        green: { bg: GH.successMuted, border: GH.successBorder, text: GH.success },
+        amber: { bg: GH.attentionMuted, border: GH.attentionBorder, text: GH.attention },
+        red: { bg: GH.dangerMuted, border: GH.dangerBorder, text: GH.danger },
+        purple: { bg: GH.doneMuted, border: GH.doneBorder, text: GH.done },
     };
     const p = palettes[color] || palettes.default;
     return (
@@ -88,9 +89,9 @@ const Label = ({ color = 'default', children, size = 'sm' }) => {
 
 const StatusDot = ({ status }) => {
     const cfg = {
-        idle:       { color: GH.fgSubtle,    label: 'Aguardando' },
-        deploying:  { color: GH.attention,   label: 'Provisionando', pulse: true },
-        live:       { color: GH.success,     label: 'Online',        pulse: true },
+        idle: { color: GH.fgSubtle, label: 'Aguardando' },
+        deploying: { color: GH.attention, label: 'Provisionando', pulse: true },
+        live: { color: GH.success, label: 'Online', pulse: true },
     }[status] || { color: GH.fgSubtle, label: status };
 
     return (
@@ -120,7 +121,7 @@ const StepProgress = ({ current }) => {
     return (
         <div className="flex items-center gap-0.5 mb-3">
             {steps.map((step, i) => {
-                const done   = i < current;
+                const done = i < current;
                 const active = i === current;
                 return (
                     <React.Fragment key={step}>
@@ -128,9 +129,9 @@ const StepProgress = ({ current }) => {
                             style={{
                                 fontSize: 10,
                                 padding: '2px 7px',
-                                background: done   ? GH.successMuted    : active ? GH.doneMuted    : GH.bgSubtle,
-                                border:    `1px solid ${done ? GH.successBorder : active ? GH.doneBorder : GH.border}`,
-                                color:     done   ? GH.success          : active ? GH.done          : GH.fgSubtle,
+                                background: done ? GH.successMuted : active ? GH.doneMuted : GH.bgSubtle,
+                                border: `1px solid ${done ? GH.successBorder : active ? GH.doneBorder : GH.border}`,
+                                color: done ? GH.success : active ? GH.done : GH.fgSubtle,
                             }}>
                             {done && <CheckCircle2 size={8} />}
                             {step}
@@ -149,8 +150,8 @@ const StepProgress = ({ current }) => {
 // Divider between pipeline nodes
 const PipelineConnector = ({ onClick, disabled, label, sub, color }) => {
     const palettes = {
-        blue:  { bg: GH.accentEmphasis,  border: GH.accentBorder,  glow: 'rgba(31,111,235,0.35)',  text: '#fff' },
-        green: { bg: GH.successEmphasis, border: GH.successBorder, glow: 'rgba(35,134,54,0.35)',   text: '#fff' },
+        blue: { bg: GH.accentEmphasis, border: GH.accentBorder, glow: 'rgba(31,111,235,0.35)', text: '#fff' },
+        green: { bg: GH.successEmphasis, border: GH.successBorder, glow: 'rgba(35,134,54,0.35)', text: '#fff' },
     };
     const p = palettes[color];
     return (
@@ -182,7 +183,7 @@ const PipelineConnector = ({ onClick, disabled, label, sub, color }) => {
 const EnvBox = ({ label, data, color, branchName }) => {
     const palettes = {
         amber: { badge: GH.attention, badgeBg: GH.attentionMuted, badgeBorder: GH.attentionBorder, badgeText: GH.attention },
-        red:   { badge: GH.danger,    badgeBg: GH.dangerMuted,    badgeBorder: GH.dangerBorder,    badgeText: GH.danger   },
+        red: { badge: GH.danger, badgeBg: GH.dangerMuted, badgeBorder: GH.dangerBorder, badgeText: GH.danger },
     };
     const p = palettes[color];
     const isUpdating = data.status === 'updating';
@@ -234,8 +235,8 @@ const App = () => {
     ]);
     const [mainRepo, setMainRepo] = useState({ commit: 'main-sha-7f2a', pendingRelease: false });
     const [environments, setEnvironments] = useState({
-        hml:  { version: 'v2.4.0-rc.1', status: 'stable', desc: 'Infraestrutura de Homologação (Pre-release)' },
-        prod: { version: 'v2.3.9',       status: 'stable', desc: 'Infraestrutura de Produção' },
+        hml: { version: 'v2.4.0-rc.1', status: 'stable', desc: 'Infraestrutura de Homologação (Pre-release)' },
+        prod: { version: 'v2.3.9', status: 'stable', desc: 'Infraestrutura de Produção' },
     });
     const [explanation, setExplanation] = useState({
         title: "Arquitetura Zero-Fixed-DEV",
@@ -286,9 +287,9 @@ const App = () => {
         setStories(prev => prev.map(s => s.id === id ? { ...s, status: 'deploying' } : s));
         if (story.deployType === 'efimero') {
             setExplanation({
-                title: "Ambiente Efêmero via GitHub Actions",
-                tech: "Um workflow do GitHub Actions orquestra o provisionamento de uma infraestrutura temporária e exclusiva. A URL gerada é aleatória e o link direto fica automaticamente disponível no Summary da Action para fácil validação.",
-                cmd: `gh workflow run deploy-ephemeral.yml -f pr=${id}\n# ... provisionando infraestrutura ...\nURL=$(generate-random-url)\necho "### 🚀 Ambiente de Teste Criado" >> $GITHUB_STEP_SUMMARY\necho "[Acessar Ambiente]($URL)" >> $GITHUB_STEP_SUMMARY`,
+                title: "Argo CD AppSet + GitHub Actions",
+                tech: "O Argo CD monitora ativamente (Pull) novos PRs via PR Generator e provisiona a infra. O GitHub Actions atua na pipeline de build, e devolve a URL no Summary (Job Summary) do desenvolvedor no PR.",
+                cmd: `# Em background (Argo CD ApplicationSet Controller):\n# Polling GitHub API -> PR #${id} Detectado\nkubectl create ns pr-${id} && argo sync ...\n\n# Na Pipeline (GitHub Actions):\nURL=$(generate-random-url)\nURL_Final="[$URL]"\necho "### 🚀 Testes Libertos" >> $GITHUB_STEP_SUMMARY\necho "[Acessar Ambiente]($URL_Final)" >> $GITHUB_STEP_SUMMARY`,
             });
         } else {
             setExplanation({
@@ -338,7 +339,7 @@ const App = () => {
         const parts = environments.prod.version.replace('v', '').split('.').map(Number);
         parts[2] += 1;
         const nextVersion = `v${parts.join('.')}`;
-        const rcVersion   = `${nextVersion}-rc.1`;
+        const rcVersion = `${nextVersion}-rc.1`;
         setEnvironments(prev => ({ ...prev, hml: { ...prev.hml, status: 'updating' } }));
         setMainRepo(prev => ({ ...prev, pendingRelease: false }));
         setExplanation({
@@ -367,9 +368,9 @@ const App = () => {
     };
 
     const getStepIndex = (story) => {
-        if (story.status === 'idle')                               return 0;
-        if (story.status === 'deploying')                          return 1;
-        if (story.status === 'live' && !story.poApproved)          return 2;
+        if (story.status === 'idle') return 0;
+        if (story.status === 'deploying') return 1;
+        if (story.status === 'live' && !story.poApproved) return 2;
         return 3;
     };
 
@@ -390,22 +391,22 @@ const App = () => {
                         if (passwordInput === 'bealiant') setIsAuthenticated(true);
                         else alert('Senha incorreta!');
                     }}>
-                        <input 
-                            type="password" 
+                        <input
+                            type="password"
                             className="w-full px-4 py-2.5 rounded-lg text-sm font-mono mb-4 text-center transition-all focus:scale-105"
                             placeholder="••••••••"
                             value={passwordInput}
                             onChange={(e) => setPasswordInput(e.target.value)}
-                            style={{ 
-                                background: GH.bgInset, 
-                                border: `1px solid ${GH.border}`, 
+                            style={{
+                                background: GH.bgInset,
+                                border: `1px solid ${GH.border}`,
                                 color: GH.fg,
                                 outline: 'none',
                                 boxShadow: passwordInput ? `0 0 10px ${GH.accent}30` : 'none'
                             }}
                             autoFocus
                         />
-                        <button type="submit" 
+                        <button type="submit"
                             className="w-full py-2.5 rounded-lg text-sm font-semibold transition-all active:scale-95 hover:brightness-110"
                             style={{ background: GH.accentEmphasis, border: `1px solid rgba(240,246,252,0.1)`, color: GH.fgOnEmphasis }}>
                             Acessar Simulador
@@ -477,12 +478,33 @@ const App = () => {
                         <Label color="red" size="xs">◆ Morre após o Merge</Label>
                     </div>
 
+                    {/* ✨ Argo CD ApplicationSet PR Generator Banner ✨ */}
+                    <div className="relative rounded-xl overflow-hidden p-3 flex gap-3 items-center transition-all animate-appear"
+                        style={{ background: GH.accentMuted, border: `1px solid ${GH.accentBorder}` }}>
+                        <div className="absolute top-0 right-0 p-1 opacity-20 pointer-events-none">
+                            <Webhook size={64} style={{ color: GH.accent }} />
+                        </div>
+                        <div className="w-10 h-10 rounded-lg flex items-center justify-center shrink-0 z-10"
+                            style={{ background: GH.bgOverlay, border: `1px solid ${GH.accentBorder}` }}>
+                            <Webhook size={18} style={{ color: GH.accent }} className="animate-pulse" />
+                        </div>
+                        <div className="z-10 flex-1">
+                            <div className="flex items-center gap-1.5 mb-1">
+                                <span className="text-xs font-bold tracking-wide uppercase" style={{ color: GH.accent }}>Argo CD PR Generator</span>
+                                <RefreshCw size={11} style={{ color: GH.accent }} className="animate-spin" />
+                            </div>
+                            <p className="text-[10px] sm:text-xs leading-snug" style={{ color: GH.fg }}>
+                                O <b>ApplicationSet</b> fica escutando o GitHub via Pull. PR abriu? Ele cria a aplicação isolada. Fez merge? Ele destrói tudo.
+                            </p>
+                        </div>
+                    </div>
+
                     {/* Cards */}
                     <div className="space-y-3">
                         {stories.map(story => {
-                            const stepIdx      = getStepIndex(story);
-                            const isEfimero    = story.deployType === 'efimero';
-                            const borderColor  = story.poApproved ? GH.success : isEfimero ? GH.done : GH.accent;
+                            const stepIdx = getStepIndex(story);
+                            const isEfimero = story.deployType === 'efimero';
+                            const borderColor = story.poApproved ? GH.success : isEfimero ? GH.done : GH.accent;
 
                             return (
                                 <div key={story.id} className="rounded-xl p-4 transition-all duration-300 animate-appear"
@@ -542,15 +564,15 @@ const App = () => {
                                                 <div className="flex rounded-lg overflow-hidden"
                                                     style={{ border: `1px solid ${GH.border}` }}>
                                                     {[
-                                                        { value: 'efimero',     label: 'Efêmero',  Icon: Zap },
-                                                        { value: 'tradicional', label: 'Fixo',     Icon: Lock },
+                                                        { value: 'efimero', label: 'Efêmero', Icon: Zap },
+                                                        { value: 'tradicional', label: 'Fixo', Icon: Lock },
                                                     ].map(({ value, label, Icon }, idx) => (
                                                         <button key={value}
                                                             onClick={() => setDeployType(story.id, value)}
                                                             className="flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-semibold transition-all"
                                                             style={{
                                                                 background: story.deployType === value ? GH.bgSubtle : 'transparent',
-                                                                color:      story.deployType === value ? GH.fg       : GH.fgMuted,
+                                                                color: story.deployType === value ? GH.fg : GH.fgMuted,
                                                                 borderRight: idx === 0 ? `1px solid ${GH.border}` : 'none',
                                                             }}>
                                                             <Icon size={11} />{label}

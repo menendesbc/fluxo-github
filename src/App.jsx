@@ -227,6 +227,8 @@ const EnvBox = ({ label, data, color, branchName }) => {
 // MAIN APP
 // ─────────────────────────────────────────────────────────
 const App = () => {
+    const [isAuthenticated, setIsAuthenticated] = useState(false);
+    const [passwordInput, setPasswordInput] = useState('');
     const [stories, setStories] = useState([
         { id: 101, title: 'Refatoração da API', branch: 'feat/api', status: 'live', url: 'api-pr101.dev.io', dev: 'Ana', poApproved: true, deployType: 'efimero' },
     ]);
@@ -248,6 +250,19 @@ const App = () => {
 
     const setDeployType = (id, type) => {
         setStories(prev => prev.map(s => s.id === id ? { ...s, deployType: type } : s));
+        if (type === 'efimero') {
+            setExplanation({
+                title: "Por que usar Infraestrutura Efêmera?",
+                tech: "Ambientes efêmeros oferecem isolamento total. Cada PR ganha uma cópia limpa do sistema, evitando interferência de testes de outros desenvolvedores. Também elimina custos ociosos, pois tudo é desligado após o merge.",
+                cmd: "# Estratégia selecionada: DEV Efêmero\n# Isolamento Total / Custo por Uso",
+            });
+        } else {
+            setExplanation({
+                title: "Por que usar Infraestrutura Fixa?",
+                tech: "Ambientes fixos são o modelo tradicional (DEV compartilhado). Todos os desenvolvedores publicam e testam no mesmo ambiente, o que frequentemente causa dados sobrescritos, fila de aprovação e conflito entre testes.",
+                cmd: "# Estratégia selecionada: DEV Compartilhado/Fixo\n# Atenção: Gargalo / Custo Contínuo (24/7)",
+            });
+        }
     };
 
     const generateSha = () => Math.random().toString(16).substring(2, 8);
@@ -259,9 +274,9 @@ const App = () => {
         const newStory = { id, title: `Story #${id}: Nova Feature`, branch: `feat/ui-${id}`, status: 'idle', url: null, dev: 'Você', poApproved: false, deployType: 'efimero' };
         setStories(prev => [newStory, ...prev]);
         setExplanation({
-            title: "Nova Branch de Curta Duração",
-            tech: "Criamos um ramo temporário a partir da main. Este ramo será a base para o ambiente DEV isolado. Nenhuma infra é provisionada ainda.",
-            cmd: `git checkout -b ${newStory.branch} main\ngit push origin ${newStory.branch}\n# Branch criada e publicada no repositório remoto.`,
+            title: "Escolha: Infraestrutura Fixa ou Efêmera?",
+            tech: "Com a branch criada, agora é preciso provisionar um ambiente para validar a funcionalidade. Você pode utilizar uma infraestrutura Efêmera (exclusiva para este PR) ou Tradicional/Fixa (uma máquina compartilhada para todo o time).",
+            cmd: `git checkout -b ${newStory.branch} main\ngit push origin ${newStory.branch}\n# Branch criada! Selecione o tipo de Deploy desejado abaixo.`,
         });
         addLog(`Git: Branch ${newStory.branch} criada.`);
     };
@@ -271,9 +286,9 @@ const App = () => {
         setStories(prev => prev.map(s => s.id === id ? { ...s, status: 'deploying' } : s));
         if (story.deployType === 'efimero') {
             setExplanation({
-                title: "Criação do Ambiente DEV (Efêmero)",
-                tech: "O Argo CD detecta a nova branch e provisiona uma infraestrutura temporária e exclusiva para este PR. Isolamento total.",
-                cmd: `kubectl create ns dev-pr-${id}\nargo app create pr-${id} \\\n  --repo https://github.com/org/repo \\\n  --dest-namespace dev-pr-${id}\n# Infra DEV provisionada dinamicamente.`,
+                title: "Ambiente Efêmero via GitHub Actions",
+                tech: "Um workflow do GitHub Actions orquestra o provisionamento de uma infraestrutura temporária e exclusiva. A URL gerada é aleatória e o link direto fica automaticamente disponível no Summary da Action para fácil validação.",
+                cmd: `gh workflow run deploy-ephemeral.yml -f pr=${id}\n# ... provisionando infraestrutura ...\nURL=$(generate-random-url)\necho "### 🚀 Ambiente de Teste Criado" >> $GITHUB_STEP_SUMMARY\necho "[Acessar Ambiente]($URL)" >> $GITHUB_STEP_SUMMARY`,
             });
         } else {
             setExplanation({
@@ -283,11 +298,12 @@ const App = () => {
             });
         }
         setTimeout(() => {
+            const randomHash = Math.random().toString(36).substring(2, 8);
             setStories(prev => prev.map(s => s.id === id ? {
                 ...s, status: 'live',
-                url: story.deployType === 'efimero' ? `pr-${id}.dev.io` : 'dev-shared.coolapp.io'
+                url: story.deployType === 'efimero' ? `pr-${id}-${randomHash}.dev.io` : 'dev-shared.coolapp.io'
             } : s));
-            addLog(`Argo CD: Deploy ${story.deployType === 'efimero' ? 'efêmero' : 'tradicional'} para PR #${id} concluído.`);
+            addLog(`Deploy ${story.deployType === 'efimero' ? 'efêmero (GHA)' : 'tradicional'} para PR #${id} concluído.`);
         }, 2000);
     };
 
@@ -359,6 +375,46 @@ const App = () => {
 
     const canPromote = environments.hml.version.split('-')[0] !== environments.prod.version
         && environments.hml.status === 'stable';
+
+    if (!isAuthenticated) {
+        return (
+            <div className="min-h-screen flex items-center justify-center font-sans p-4" style={{ background: GH.bgDefault, color: GH.fg }}>
+                <div className="w-full max-w-sm rounded-xl p-8 text-center animate-appear" style={{ background: GH.bgOverlay, border: `1px solid ${GH.border}` }}>
+                    <div className="w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-4" style={{ background: GH.doneMuted, border: `1px solid ${GH.doneBorder}` }}>
+                        <Lock size={22} style={{ color: GH.done }} />
+                    </div>
+                    <h1 className="font-bold text-lg mb-2" style={{ color: GH.fg }}>Acesso Restrito</h1>
+                    <p className="text-xs mb-6" style={{ color: GH.fgMuted }}>Simulador DevOps. Insira a senha fornecida pela Aliant.</p>
+                    <form onSubmit={(e) => {
+                        e.preventDefault();
+                        if (passwordInput === 'bealiant') setIsAuthenticated(true);
+                        else alert('Senha incorreta!');
+                    }}>
+                        <input 
+                            type="password" 
+                            className="w-full px-4 py-2.5 rounded-lg text-sm font-mono mb-4 text-center transition-all focus:scale-105"
+                            placeholder="••••••••"
+                            value={passwordInput}
+                            onChange={(e) => setPasswordInput(e.target.value)}
+                            style={{ 
+                                background: GH.bgInset, 
+                                border: `1px solid ${GH.border}`, 
+                                color: GH.fg,
+                                outline: 'none',
+                                boxShadow: passwordInput ? `0 0 10px ${GH.accent}30` : 'none'
+                            }}
+                            autoFocus
+                        />
+                        <button type="submit" 
+                            className="w-full py-2.5 rounded-lg text-sm font-semibold transition-all active:scale-95 hover:brightness-110"
+                            style={{ background: GH.accentEmphasis, border: `1px solid rgba(240,246,252,0.1)`, color: GH.fgOnEmphasis }}>
+                            Acessar Simulador
+                        </button>
+                    </form>
+                </div>
+            </div>
+        );
+    }
 
     // ── Render ──
     return (

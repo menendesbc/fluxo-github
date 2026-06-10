@@ -5,7 +5,7 @@ import {
     GitBranch, Info, ArrowDown,
     Layers, Zap, Rocket, UserCheck,
     ShieldCheck, Lock, GitMerge, Tag,
-    Webhook, RefreshCw
+    Webhook, RefreshCw, Bug
 } from 'lucide-react';
 
 // ─────────────────────────────────────────────────────────
@@ -116,8 +116,8 @@ const BranchTag = ({ branch, color = GH.done }) => (
     </span>
 );
 
-const StepProgress = ({ current }) => {
-    const steps = ['Branch', 'Deploy', 'Validar', 'Merge'];
+const StepProgress = ({ current, steps: stepsProp }) => {
+    const steps = stepsProp || ['Branch', 'Deploy', 'Validar', 'Merge'];
     return (
         <div className="flex items-center gap-0.5 mb-3">
             {steps.map((step, i) => {
@@ -179,13 +179,26 @@ const PipelineConnector = ({ onClick, disabled, label, sub, color }) => {
     );
 };
 
+// Simple arrow connector (non-interactive, for multi-env pipeline)
+const PipelineArrow = () => (
+    <div className="flex flex-col md:flex-row items-center justify-center shrink-0 px-1">
+        <ArrowDown size={16} className="md:hidden my-1" style={{ color: GH.fgSubtle }} />
+        <div className="hidden md:flex items-center justify-center w-6">
+            <ArrowRight size={16} style={{ color: GH.fgSubtle }} className="animate-flow" />
+        </div>
+    </div>
+);
+
 // Pipeline environment node
 const EnvBox = ({ label, data, color, branchName }) => {
     const palettes = {
         amber: { badge: GH.attention, badgeBg: GH.attentionMuted, badgeBorder: GH.attentionBorder, badgeText: GH.attention },
         red: { badge: GH.danger, badgeBg: GH.dangerMuted, badgeBorder: GH.dangerBorder, badgeText: GH.danger },
+        blue: { badge: GH.accent, badgeBg: GH.accentMuted, badgeBorder: GH.accentBorder, badgeText: GH.accent },
+        purple: { badge: GH.done, badgeBg: GH.doneMuted, badgeBorder: GH.doneBorder, badgeText: GH.done },
+        green: { badge: GH.success, badgeBg: GH.successMuted, badgeBorder: GH.successBorder, badgeText: GH.success },
     };
-    const p = palettes[color];
+    const p = palettes[color] || palettes.amber;
     const isUpdating = data.status === 'updating';
 
     return (
@@ -230,6 +243,13 @@ const EnvBox = ({ label, data, color, branchName }) => {
 const App = () => {
     const [isAuthenticated, setIsAuthenticated] = useState(false);
     const [passwordInput, setPasswordInput] = useState('');
+
+    // ── Scenario toggle ──
+    const [activeScenario, setActiveScenario] = useState('zero-dev');
+
+    // ═══════════════════════════════════════════════════════
+    // ZERO-FIXED-DEV STATE (existing scenario)
+    // ═══════════════════════════════════════════════════════
     const [stories, setStories] = useState([
         { id: 101, title: 'Refatoração da API', branch: 'feat/api', status: 'live', url: 'api-pr101.dev.io', dev: 'Ana', poApproved: true, deployType: 'efimero' },
     ]);
@@ -245,9 +265,49 @@ const App = () => {
     });
     const [logs, setLogs] = useState([]);
 
+    // ═══════════════════════════════════════════════════════
+    // MULTI-AMBIENTE STATE (new scenario)
+    // ═══════════════════════════════════════════════════════
+    const [meStories, setMeStories] = useState([
+        {
+            id: 301,
+            title: 'Integração Gateway de Pagamentos',
+            branch: 'feat/payments-v2',
+            type: 'feature',
+            currentEnv: 'feature-test',
+            status: 'live',
+            featureTestApproved: false,
+            testApproved: false,
+            dev: 'Carlos',
+            url: 'feat-payments-v2.dev-tia.bealiant.dev',
+        },
+    ]);
+    const [meEnvironments, setMeEnvironments] = useState({
+        test: { version: 'v1.8.0-test.3', status: 'stable', desc: 'Ambiente de Testes Integrados' },
+        hml: { version: 'v1.7.2-rc.1', status: 'stable', desc: 'Ambiente de Homologação' },
+        prod: { version: 'v1.7.1', status: 'stable', desc: 'Infraestrutura de Produção' },
+    });
+    const [meExplanation, setMeExplanation] = useState({
+        title: "Arquitetura Multi-Ambiente Enterprise",
+        tech: "Modelo com múltiplos ambientes: Feature Env (isolado por branch, só front), Teste (compartilhado), HML e Produção. Cada estágio requer aprovação do tester antes de avançar. Bugfixes têm fast-track direto para Produção.",
+        cmd: "# Ambientes disponíveis:\n# *.dev-tia.bealiant.dev  → Feature (isolado)\n# test.dev-tia.bealiant.dev → Teste\n# hml.dev-tia.bealiant.dev  → HML\n# Selecione uma ação para iniciar.",
+    });
+    const [meLogs, setMeLogs] = useState([]);
+
+    // ═══════════════════════════════════════════════════════
+    // SHARED HELPERS
+    // ═══════════════════════════════════════════════════════
     const addLog = (msg) => {
         setLogs(prev => [`[${new Date().toLocaleTimeString()}] ${msg}`, ...prev].slice(0, 8));
     };
+    const addMeLog = (msg) => {
+        setMeLogs(prev => [`[${new Date().toLocaleTimeString()}] ${msg}`, ...prev].slice(0, 8));
+    };
+    const generateSha = () => Math.random().toString(16).substring(2, 8);
+
+    // ═══════════════════════════════════════════════════════
+    // ZERO-FIXED-DEV ACTIONS (existing — unchanged)
+    // ═══════════════════════════════════════════════════════
 
     const setDeployType = (id, type) => {
         setStories(prev => prev.map(s => s.id === id ? { ...s, deployType: type } : s));
@@ -265,10 +325,6 @@ const App = () => {
             });
         }
     };
-
-    const generateSha = () => Math.random().toString(16).substring(2, 8);
-
-    // ── Actions ──
 
     const createStory = () => {
         const id = Math.floor(Math.random() * 900) + 200;
@@ -377,6 +433,183 @@ const App = () => {
     const canPromote = environments.hml.version.split('-')[0] !== environments.prod.version
         && environments.hml.status === 'stable';
 
+    // ═══════════════════════════════════════════════════════
+    // MULTI-AMBIENTE ACTIONS (new)
+    // ═══════════════════════════════════════════════════════
+
+    const meCreateStory = (type) => {
+        const id = Math.floor(Math.random() * 900) + 200;
+        const prefix = type === 'bugfix' ? 'fix' : 'feat';
+        const title = type === 'bugfix'
+            ? `Bugfix #${id}: Correção Crítica`
+            : `Story #${id}: Nova Feature`;
+        const branch = `${prefix}/task-${id}`;
+
+        const newStory = {
+            id, title, branch, type,
+            currentEnv: 'dev',
+            status: 'idle',
+            featureTestApproved: false,
+            testApproved: false,
+            dev: 'Você',
+            url: null,
+        };
+
+        setMeStories(prev => [newStory, ...prev]);
+        setMeExplanation({
+            title: type === 'bugfix' ? "Bugfix: Fluxo Fast-Track" : "Feature: Fluxo Completo",
+            tech: type === 'bugfix'
+                ? "Bugfixes seguem um fluxo acelerado. Após aprovação no Feature Env e no Teste, podem ir direto para Produção e HML simultaneamente, sem esperar a janela de deploy."
+                : "Features seguem o fluxo completo: Feature Env → Teste → HML → Produção. Cada etapa requer aprovação do tester antes de avançar para a próxima.",
+            cmd: `git checkout -b ${branch} main\ngit push origin ${branch}\n# Branch ${type === 'bugfix' ? 'de bugfix' : 'de feature'} criada!\n# Próximo: Deploy para Feature Env.`,
+        });
+        addMeLog(`Git: Branch ${branch} criada (${type}).`);
+    };
+
+    const meDeployFeatureEnv = (id) => {
+        const story = meStories.find(s => s.id === id);
+        setMeStories(prev => prev.map(s => s.id === id ? { ...s, status: 'deploying' } : s));
+        const branchSlug = story.branch.replace(/\//g, '-');
+        setMeExplanation({
+            title: "Deploy para Ambiente de Feature",
+            tech: "O front-end é deployado em um ambiente isolado por branch. Backend e serviços compartilhados são os mesmos do ambiente de teste. URL segue o padrão: branch-name.dev-tia.bealiant.dev",
+            cmd: `# CI/CD Pipeline:\ndocker build -t registry/${story.branch}:latest .\nkubectl apply -f feature-env.yaml\n# URL: ${branchSlug}.dev-tia.bealiant.dev`,
+        });
+        setTimeout(() => {
+            const url = `${branchSlug}.dev-tia.bealiant.dev`;
+            setMeStories(prev => prev.map(s => s.id === id ? {
+                ...s, status: 'live', currentEnv: 'feature-test', url
+            } : s));
+            addMeLog(`Deploy: Feature env ${story.branch} online → ${url}`);
+        }, 2000);
+    };
+
+    const meApproveFeatureTest = (id) => {
+        setMeStories(prev => prev.map(s => s.id === id ? { ...s, featureTestApproved: true } : s));
+        const story = meStories.find(s => s.id === id);
+        setMeExplanation({
+            title: "Tester: Aprovado no Feature Env",
+            tech: "O tester validou a funcionalidade no ambiente isolado de branch. O próximo passo é enviar para o ambiente de Teste compartilhado, onde a integração com outras features e o backend serão validados.",
+            cmd: `# Teste de feature env aprovado ✓\n# ${story?.branch} → test.dev-tia.bealiant.dev\n# Próximo: Enviar para ambiente de Teste.`,
+        });
+        addMeLog(`Tester: Feature env #${id} (${story?.branch}) aprovada.`);
+    };
+
+    const meSendToTest = (id) => {
+        const story = meStories.find(s => s.id === id);
+        setMeStories(prev => prev.map(s => s.id === id ? {
+            ...s, status: 'deploying', currentEnv: 'test', url: 'test.dev-tia.bealiant.dev'
+        } : s));
+        setMeEnvironments(prev => ({ ...prev, test: { ...prev.test, status: 'updating' } }));
+        setMeExplanation({
+            title: "Enviando para Ambiente de Teste",
+            tech: "O código aprovado no Feature Env é deployado no ambiente de Teste compartilhado. Aqui o tester valida a integração completa com backend, banco de dados e outras features já no ambiente.",
+            cmd: `# Merge para branch de teste:\ngit checkout test && git merge ${story?.branch}\n# CI/CD atualiza test.dev-tia.bealiant.dev\nkubectl rollout status deploy/test-frontend`,
+        });
+        setTimeout(() => {
+            const minor = Math.floor(Math.random() * 9) + 1;
+            const patch = Math.floor(Math.random() * 9) + 1;
+            const testVer = `v1.${8 + minor}.0-test.${patch}`;
+            setMeStories(prev => prev.map(s => s.id === id ? { ...s, status: 'live' } : s));
+            setMeEnvironments(prev => ({ ...prev, test: { ...prev.test, status: 'stable', version: testVer } }));
+            addMeLog(`Deploy: ${story?.branch} em test.dev-tia.bealiant.dev (${testVer}).`);
+        }, 2000);
+    };
+
+    const meApproveTest = (id) => {
+        const story = meStories.find(s => s.id === id);
+        setMeStories(prev => prev.map(s => s.id === id ? { ...s, testApproved: true } : s));
+        setMeExplanation({
+            title: story?.type === 'bugfix' ? "Teste OK — Fast-Track Disponível ⚡" : "Teste OK — Pronto para HML",
+            tech: story?.type === 'bugfix'
+                ? "Bugfix aprovado no Teste! Como é correção crítica, pode ser enviado diretamente para Produção e HML simultaneamente, sem esperar a janela de deploy. Isso evita que o fix fique preso na fila."
+                : "Feature aprovada no Teste! O time decidirá quando enviar para HML (homologação). Em HML, a validação final é feita antes da promoção para Produção na próxima janela de deploy.",
+            cmd: story?.type === 'bugfix'
+                ? `# Bugfix ${story?.branch} aprovado em Teste ✓\n# Fast-track disponível:\n# → Prod + HML simultaneamente\n# Sem esperar janela de deploy!`
+                : `# Feature ${story?.branch} aprovada em Teste ✓\n# Próximo: hml.dev-tia.bealiant.dev\n# Aguardando decisão do time.`,
+        });
+        addMeLog(`Tester: ${story?.branch} aprovada em ambiente de Teste.`);
+    };
+
+    const meSendToHml = (id) => {
+        const story = meStories.find(s => s.id === id);
+        setMeStories(prev => prev.map(s => s.id === id ? {
+            ...s, status: 'deploying', currentEnv: 'hml', url: 'hml.dev-tia.bealiant.dev'
+        } : s));
+        setMeEnvironments(prev => ({ ...prev, hml: { ...prev.hml, status: 'updating' } }));
+        setMeExplanation({
+            title: "Enviando para Homologação (HML)",
+            tech: "O código aprovado no Teste é promovido para HML. Este é o último estágio antes de Produção. O deploy para Produção acontece na próxima janela de deploy agendada.",
+            cmd: `# Promoção para HML:\ngit checkout hml && git merge test\n# CI/CD atualiza hml.dev-tia.bealiant.dev\nkubectl rollout status deploy/hml-frontend`,
+        });
+        setTimeout(() => {
+            const minor = Math.floor(Math.random() * 9) + 1;
+            const hmlVer = `v1.${8 + minor}.0-rc.1`;
+            setMeStories(prev => prev.map(s => s.id === id ? { ...s, status: 'live' } : s));
+            setMeEnvironments(prev => ({ ...prev, hml: { ...prev.hml, status: 'stable', version: hmlVer } }));
+            addMeLog(`Deploy: ${story?.branch} em hml.dev-tia.bealiant.dev (${hmlVer}).`);
+        }, 2000);
+    };
+
+    const meDeployToProd = (id, isFastTrack = false) => {
+        const story = meStories.find(s => s.id === id);
+        setMeStories(prev => prev.map(s => s.id === id ? {
+            ...s, status: 'deploying', currentEnv: 'prod', url: 'app.bealiant.dev'
+        } : s));
+        setMeEnvironments(prev => ({
+            ...prev,
+            prod: { ...prev.prod, status: 'updating' },
+            ...(isFastTrack ? { hml: { ...prev.hml, status: 'updating' } } : {}),
+        }));
+        setMeExplanation({
+            title: isFastTrack ? "Bugfix Fast-Track: Prod + HML ⚡" : "Deploy para Produção",
+            tech: isFastTrack
+                ? "Bugfix crítico sendo enviado diretamente para Produção e HML simultaneamente. Esse atalho evita que a correção fique presa aguardando a janela de deploy normal. O HML também recebe para manter paridade."
+                : "O código validado em HML está sendo promovido para Produção na janela de deploy agendada. O mesmo artefato testado vai à produção.",
+            cmd: isFastTrack
+                ? `# Fast-track bugfix:\ngit checkout main && git merge ${story?.branch}\ngit tag -a hotfix-${story?.id} -m "Hotfix"\n# Deploy simultâneo: PROD + HML\nkubectl rollout status deploy/prod-frontend\nkubectl rollout status deploy/hml-frontend`
+                : `# Promoção para Produção:\ngit checkout main && git merge hml\ngit tag -a release-${story?.id} -m "Release"\n# Deploy PROD\nkubectl rollout status deploy/prod-frontend`,
+        });
+        setTimeout(() => {
+            const major = 1;
+            const minor = Math.floor(Math.random() * 4) + 8;
+            const patch = Math.floor(Math.random() * 9);
+            const prodVer = `v${major}.${minor}.${patch}`;
+            setMeStories(prev => prev.filter(s => s.id !== id));
+            setMeEnvironments(prev => ({
+                ...prev,
+                prod: { ...prev.prod, status: 'stable', version: prodVer },
+                ...(isFastTrack ? { hml: { ...prev.hml, status: 'stable', version: `${prodVer}-rc.1` } } : {}),
+            }));
+            addMeLog(`SUCCESS: ${story?.branch} em Produção ${prodVer}${isFastTrack ? ' + HML (fast-track)' : ''}.`);
+        }, 2500);
+    };
+
+    const getMeStepIndex = (story) => {
+        if (story.currentEnv === 'dev') return 0;
+        if (story.currentEnv === 'feature-test') return 1;
+        if (story.currentEnv === 'test') return 2;
+        if (story.type === 'bugfix') {
+            if (story.currentEnv === 'prod') return 3;
+        } else {
+            if (story.currentEnv === 'hml') return 3;
+            if (story.currentEnv === 'prod') return 4;
+        }
+        return 0;
+    };
+
+    const meEnvColorMap = {
+        'dev': { color: 'default', label: 'DEV' },
+        'feature-test': { color: 'purple', label: 'Feature Env' },
+        'test': { color: 'blue', label: 'Teste' },
+        'hml': { color: 'amber', label: 'HML' },
+        'prod': { color: 'green', label: 'Produção' },
+    };
+
+    // ═══════════════════════════════════════════════════════
+    // AUTH SCREEN
+    // ═══════════════════════════════════════════════════════
+
     if (!isAuthenticated) {
         return (
             <div className="min-h-screen flex items-center justify-center font-sans p-4" style={{ background: GH.bgDefault, color: GH.fg }}>
@@ -417,7 +650,17 @@ const App = () => {
         );
     }
 
-    // ── Render ──
+    // ═══════════════════════════════════════════════════════
+    // CURRENT EXPLANATION & LOGS (scenario-aware)
+    // ═══════════════════════════════════════════════════════
+    const currentExplanation = activeScenario === 'zero-dev' ? explanation : meExplanation;
+    const currentLogs = activeScenario === 'zero-dev' ? logs : meLogs;
+
+    const activeFeatureEnvs = meStories.filter(s => s.currentEnv === 'feature-test');
+
+    // ═══════════════════════════════════════════════════════
+    // MAIN RENDER
+    // ═══════════════════════════════════════════════════════
     return (
         <div className="min-h-screen font-sans flex flex-col p-4 md:p-5 gap-5 text-sm"
             style={{ background: GH.bgDefault, color: GH.fg }}>
@@ -432,233 +675,536 @@ const App = () => {
                 <div className="flex items-center gap-3">
                     <div className="p-2.5 rounded-lg"
                         style={{ background: GH.doneMuted, border: `1px solid ${GH.doneBorder}` }}>
-                        <Layers size={22} style={{ color: GH.done }} />
+                        {activeScenario === 'zero-dev'
+                            ? <Layers size={22} style={{ color: GH.done }} />
+                            : <GitGraph size={22} style={{ color: GH.done }} />
+                        }
                     </div>
                     <div>
                         <h1 className="font-bold text-base leading-none mb-1" style={{ color: GH.fg }}>
-                            Arquitetura Zero-Fixed-DEV
+                            {activeScenario === 'zero-dev' ? 'Arquitetura Zero-Fixed-DEV' : 'Multi-Ambiente Enterprise'}
                         </h1>
                         <p className="text-xs" style={{ color: GH.fgMuted }}>
-                            DEV Efêmero → Merge → Pre-release (HML) → Release (PROD)
+                            {activeScenario === 'zero-dev'
+                                ? 'DEV Efêmero → Merge → Pre-release (HML) → Release (PROD)'
+                                : 'Feature Env → Teste → HML → Produção'
+                            }
                         </p>
                     </div>
                 </div>
 
                 <div className="flex items-center gap-2 flex-wrap justify-center md:justify-end">
-                    {/* Stats */}
-                    <div className="hidden md:flex items-center gap-2">
-                        <Label color="blue"><Activity size={10} />{stories.length} PR{stories.length !== 1 ? 's' : ''}</Label>
-                        <Label color="amber">HML {environments.hml.version}</Label>
-                        <Label color="green"><ShieldCheck size={10} />PROD {environments.prod.version}</Label>
+                    {/* ── Scenario Toggle ── */}
+                    <div className="flex rounded-lg overflow-hidden"
+                        style={{ border: `1px solid ${GH.border}`, background: GH.bgInset }}>
+                        <button
+                            onClick={() => setActiveScenario('zero-dev')}
+                            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold transition-all duration-200"
+                            style={{
+                                background: activeScenario === 'zero-dev' ? GH.doneMuted : 'transparent',
+                                color: activeScenario === 'zero-dev' ? GH.done : GH.fgSubtle,
+                                borderRight: `1px solid ${GH.border}`,
+                            }}>
+                            <Zap size={11} /> Zero-Fixed-DEV
+                        </button>
+                        <button
+                            onClick={() => setActiveScenario('multi-env')}
+                            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold transition-all duration-200"
+                            style={{
+                                background: activeScenario === 'multi-env' ? GH.accentMuted : 'transparent',
+                                color: activeScenario === 'multi-env' ? GH.accent : GH.fgSubtle,
+                            }}>
+                            <Layers size={11} /> Multi-Ambiente
+                        </button>
                     </div>
-                    <button onClick={createStory}
-                        className="flex items-center gap-2 px-4 py-2 rounded-lg font-semibold text-sm transition-all duration-150 active:scale-95 hover:brightness-110"
-                        style={{
-                            background: GH.successEmphasis,
-                            border: `1px solid rgba(240,246,252,0.1)`,
-                            color: GH.fgOnEmphasis,
-                            boxShadow: '0 1px 0 rgba(27,31,35,0.04)',
-                        }}>
-                        <GitPullRequest size={15} /> Iniciar História
-                    </button>
+
+                    {/* ── Stats ── */}
+                    <div className="hidden md:flex items-center gap-2">
+                        {activeScenario === 'zero-dev' ? (
+                            <>
+                                <Label color="blue"><Activity size={10} />{stories.length} PR{stories.length !== 1 ? 's' : ''}</Label>
+                                <Label color="amber">HML {environments.hml.version}</Label>
+                                <Label color="green"><ShieldCheck size={10} />PROD {environments.prod.version}</Label>
+                            </>
+                        ) : (
+                            <>
+                                <Label color="purple"><Activity size={10} />{meStories.length} task{meStories.length !== 1 ? 's' : ''}</Label>
+                                <Label color="blue">TEST {meEnvironments.test.version}</Label>
+                                <Label color="amber">HML {meEnvironments.hml.version}</Label>
+                                <Label color="green"><ShieldCheck size={10} />PROD {meEnvironments.prod.version}</Label>
+                            </>
+                        )}
+                    </div>
+
+                    {/* ── Action Buttons ── */}
+                    {activeScenario === 'zero-dev' ? (
+                        <button onClick={createStory}
+                            className="flex items-center gap-2 px-4 py-2 rounded-lg font-semibold text-sm transition-all duration-150 active:scale-95 hover:brightness-110"
+                            style={{
+                                background: GH.successEmphasis,
+                                border: `1px solid rgba(240,246,252,0.1)`,
+                                color: GH.fgOnEmphasis,
+                                boxShadow: '0 1px 0 rgba(27,31,35,0.04)',
+                            }}>
+                            <GitPullRequest size={15} /> Iniciar História
+                        </button>
+                    ) : (
+                        <div className="flex items-center gap-2">
+                            <button onClick={() => meCreateStory('feature')}
+                                className="flex items-center gap-1.5 px-3 py-2 rounded-lg font-semibold text-xs transition-all duration-150 active:scale-95 hover:brightness-110"
+                                style={{
+                                    background: GH.doneEmphasis,
+                                    border: `1px solid rgba(240,246,252,0.1)`,
+                                    color: GH.fgOnEmphasis,
+                                }}>
+                                <Zap size={13} /> Feature
+                            </button>
+                            <button onClick={() => meCreateStory('bugfix')}
+                                className="flex items-center gap-1.5 px-3 py-2 rounded-lg font-semibold text-xs transition-all duration-150 active:scale-95 hover:brightness-110"
+                                style={{
+                                    background: GH.dangerEmphasis,
+                                    border: `1px solid rgba(240,246,252,0.1)`,
+                                    color: GH.fgOnEmphasis,
+                                }}>
+                                <Bug size={13} /> Bugfix
+                            </button>
+                        </div>
+                    )}
                 </div>
             </header>
 
             {/* ══ GRID ══ */}
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 flex-1">
 
-                {/* ── LEFT: DEV Stories ── */}
+                {/* ══════════════════════════════════════════════ */}
+                {/* ── LEFT PANEL ─────────────────────────────── */}
+                {/* ══════════════════════════════════════════════ */}
                 <div className="lg:col-span-4 flex flex-col gap-3">
-                    {/* Section header */}
-                    <div className="flex items-center justify-between px-1 pb-1"
-                        style={{ borderBottom: `1px solid ${GH.border}` }}>
-                        <span className="text-xs font-semibold" style={{ color: GH.fgMuted }}>
-                            Infra de DEV (Efêmera)
-                        </span>
-                        <Label color="red" size="xs">◆ Morre após o Merge</Label>
-                    </div>
 
-                    {/* ✨ Argo CD ApplicationSet PR Generator Banner ✨ */}
-                    <div className="relative rounded-xl overflow-hidden p-3 flex gap-3 items-center transition-all animate-appear"
-                        style={{ background: GH.accentMuted, border: `1px solid ${GH.accentBorder}` }}>
-                        <div className="absolute top-0 right-0 p-1 opacity-20 pointer-events-none">
-                            <Webhook size={64} style={{ color: GH.accent }} />
-                        </div>
-                        <div className="w-10 h-10 rounded-lg flex items-center justify-center shrink-0 z-10"
-                            style={{ background: GH.bgOverlay, border: `1px solid ${GH.accentBorder}` }}>
-                            <Webhook size={18} style={{ color: GH.accent }} className="animate-pulse" />
-                        </div>
-                        <div className="z-10 flex-1">
-                            <div className="flex items-center gap-1.5 mb-1">
-                                <span className="text-xs font-bold tracking-wide uppercase" style={{ color: GH.accent }}>Argo CD PR Generator</span>
-                                <RefreshCw size={11} style={{ color: GH.accent }} className="animate-spin" />
+                    {activeScenario === 'zero-dev' ? (
+                        <>
+                            {/* ── ZERO-DEV: Section header ── */}
+                            <div className="flex items-center justify-between px-1 pb-1"
+                                style={{ borderBottom: `1px solid ${GH.border}` }}>
+                                <span className="text-xs font-semibold" style={{ color: GH.fgMuted }}>
+                                    Infra de DEV (Efêmera)
+                                </span>
+                                <Label color="red" size="xs">◆ Morre após o Merge</Label>
                             </div>
-                            <p className="text-[10px] sm:text-xs leading-snug" style={{ color: GH.fg }}>
-                                O <b>ApplicationSet</b> fica escutando o GitHub via Pull. PR abriu? Ele cria a aplicação isolada. Fez merge? Ele destrói tudo.
-                            </p>
-                        </div>
-                    </div>
 
-                    {/* Cards */}
-                    <div className="space-y-3">
-                        {stories.map(story => {
-                            const stepIdx = getStepIndex(story);
-                            const isEfimero = story.deployType === 'efimero';
-                            const borderColor = story.poApproved ? GH.success : isEfimero ? GH.done : GH.accent;
-
-                            return (
-                                <div key={story.id} className="rounded-xl p-4 transition-all duration-300 animate-appear"
-                                    style={{
-                                        background: GH.bgOverlay,
-                                        border: `1px solid ${GH.border}`,
-                                        borderLeft: `3px solid ${borderColor}`,
-                                    }}>
-
-                                    {/* Card header */}
-                                    <div className="flex items-center justify-between mb-2">
-                                        <div className="flex items-center gap-2">
-                                            <span className="text-xs font-semibold" style={{ color: GH.fgSubtle }}>
-                                                PR #{story.id}
-                                            </span>
-                                            {story.poApproved && (
-                                                <Label color="green" size="xs">
-                                                    <CheckCircle2 size={9} /> PO OK
-                                                </Label>
-                                            )}
-                                        </div>
-                                        <StatusDot status={story.status} />
+                            {/* ✨ Argo CD ApplicationSet PR Generator Banner ✨ */}
+                            <div className="relative rounded-xl overflow-hidden p-3 flex gap-3 items-center transition-all animate-appear"
+                                style={{ background: GH.accentMuted, border: `1px solid ${GH.accentBorder}` }}>
+                                <div className="absolute top-0 right-0 p-1 opacity-20 pointer-events-none">
+                                    <Webhook size={64} style={{ color: GH.accent }} />
+                                </div>
+                                <div className="w-10 h-10 rounded-lg flex items-center justify-center shrink-0 z-10"
+                                    style={{ background: GH.bgOverlay, border: `1px solid ${GH.accentBorder}` }}>
+                                    <Webhook size={18} style={{ color: GH.accent }} className="animate-pulse" />
+                                </div>
+                                <div className="z-10 flex-1">
+                                    <div className="flex items-center gap-1.5 mb-1">
+                                        <span className="text-xs font-bold tracking-wide uppercase" style={{ color: GH.accent }}>Argo CD PR Generator</span>
+                                        <RefreshCw size={11} style={{ color: GH.accent }} className="animate-spin" />
                                     </div>
+                                    <p className="text-[10px] sm:text-xs leading-snug" style={{ color: GH.fg }}>
+                                        O <b>ApplicationSet</b> fica escutando o GitHub via Pull. PR abriu? Ele cria a aplicação isolada. Fez merge? Ele destrói tudo.
+                                    </p>
+                                </div>
+                            </div>
 
-                                    <StepProgress current={stepIdx} />
+                            {/* ── ZERO-DEV: Story Cards ── */}
+                            <div className="space-y-3">
+                                {stories.map(story => {
+                                    const stepIdx = getStepIndex(story);
+                                    const isEfimero = story.deployType === 'efimero';
+                                    const borderColor = story.poApproved ? GH.success : isEfimero ? GH.done : GH.accent;
 
-                                    <h4 className="font-semibold mb-3 leading-snug" style={{ color: GH.fg }}>
-                                        {story.title}
-                                    </h4>
-
-                                    {/* Branch flow */}
-                                    <div className="flex items-center gap-2 rounded-lg p-2.5 mb-3"
-                                        style={{ background: GH.bgInset, border: `1px solid ${GH.border}` }}>
-                                        <BranchTag branch={story.branch} color={GH.done} />
-                                        <ArrowRight size={11} style={{ color: GH.fgSubtle, flexShrink: 0 }} />
-                                        <BranchTag branch="main" color={GH.success} />
-                                    </div>
-
-                                    {/* URL */}
-                                    {story.url && (
-                                        <div className="flex items-center justify-between rounded-lg px-3 py-2 mb-3"
+                                    return (
+                                        <div key={story.id} className="rounded-xl p-4 transition-all duration-300 animate-appear"
                                             style={{
-                                                background: GH.accentMuted,
-                                                border: `1px solid ${GH.accentBorder}`,
-                                                color: GH.accent,
+                                                background: GH.bgOverlay,
+                                                border: `1px solid ${GH.border}`,
+                                                borderLeft: `3px solid ${borderColor}`,
                                             }}>
-                                            <span className="font-mono text-xs">{story.url}</span>
-                                            <ExternalLink size={11} />
-                                        </div>
-                                    )}
 
-                                    {/* Actions */}
-                                    <div className="flex flex-col gap-2">
-                                        {story.status === 'idle' && (
-                                            <>
-                                                {/* Deploy type toggle */}
-                                                <div className="flex rounded-lg overflow-hidden"
-                                                    style={{ border: `1px solid ${GH.border}` }}>
-                                                    {[
-                                                        { value: 'efimero', label: 'Efêmero', Icon: Zap },
-                                                        { value: 'tradicional', label: 'Fixo', Icon: Lock },
-                                                    ].map(({ value, label, Icon }, idx) => (
-                                                        <button key={value}
-                                                            onClick={() => setDeployType(story.id, value)}
-                                                            className="flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-semibold transition-all"
-                                                            style={{
-                                                                background: story.deployType === value ? GH.bgSubtle : 'transparent',
-                                                                color: story.deployType === value ? GH.fg : GH.fgMuted,
-                                                                borderRight: idx === 0 ? `1px solid ${GH.border}` : 'none',
-                                                            }}>
-                                                            <Icon size={11} />{label}
-                                                        </button>
-                                                    ))}
+                                            {/* Card header */}
+                                            <div className="flex items-center justify-between mb-2">
+                                                <div className="flex items-center gap-2">
+                                                    <span className="text-xs font-semibold" style={{ color: GH.fgSubtle }}>
+                                                        PR #{story.id}
+                                                    </span>
+                                                    {story.poApproved && (
+                                                        <Label color="green" size="xs">
+                                                            <CheckCircle2 size={9} /> PO OK
+                                                        </Label>
+                                                    )}
                                                 </div>
-                                                <button onClick={() => deployPreview(story.id)}
-                                                    className="w-full py-2 rounded-lg text-sm font-semibold flex items-center justify-center gap-2 transition-all active:scale-95 hover:brightness-110"
-                                                    style={{
-                                                        background: GH.accentEmphasis,
-                                                        border: `1px solid rgba(240,246,252,0.1)`,
-                                                        color: GH.fgOnEmphasis,
-                                                    }}>
-                                                    <Rocket size={13} /> Subir Infra DEV
-                                                </button>
-                                            </>
-                                        )}
-
-                                        {story.status === 'deploying' && (
-                                            <div className="w-full py-2 rounded-lg text-sm font-semibold text-center animate-shimmer"
-                                                style={{
-                                                    background: GH.attentionMuted,
-                                                    border: `1px solid ${GH.attentionBorder}`,
-                                                    color: GH.attention,
-                                                }}>
-                                                Provisionando ambiente...
+                                                <StatusDot status={story.status} />
                                             </div>
-                                        )}
 
-                                        {story.status === 'live' && !story.poApproved && (
-                                            <button onClick={() => approvePO(story.id)}
-                                                className="w-full py-2 rounded-lg text-sm font-semibold flex items-center justify-center gap-2 transition-all active:scale-95 hover:brightness-110"
-                                                style={{
-                                                    background: GH.attentionEmphasis,
-                                                    border: `1px solid rgba(240,246,252,0.1)`,
-                                                    color: GH.fgOnEmphasis,
-                                                }}>
-                                                <UserCheck size={13} /> Validar em DEV (PO)
-                                            </button>
-                                        )}
+                                            <StepProgress current={stepIdx} />
 
-                                        {story.status === 'live' && (
-                                            <button
-                                                onClick={() => story.poApproved && mergeToMain(story.id)}
-                                                className="w-full py-2 rounded-lg text-sm font-semibold flex items-center justify-center gap-2 transition-all"
-                                                style={story.poApproved ? {
-                                                    background: GH.dangerEmphasis,
-                                                    border: `1px solid rgba(240,246,252,0.1)`,
-                                                    color: GH.fgOnEmphasis,
-                                                    cursor: 'pointer',
-                                                } : {
-                                                    background: GH.bgSubtle,
-                                                    border: `1px solid ${GH.border}`,
-                                                    color: GH.fgSubtle,
-                                                    cursor: 'not-allowed',
-                                                }}>
-                                                <GitMerge size={13} /> Merge & Destruir Infra DEV
-                                            </button>
-                                        )}
+                                            <h4 className="font-semibold mb-3 leading-snug" style={{ color: GH.fg }}>
+                                                {story.title}
+                                            </h4>
+
+                                            {/* Branch flow */}
+                                            <div className="flex items-center gap-2 rounded-lg p-2.5 mb-3"
+                                                style={{ background: GH.bgInset, border: `1px solid ${GH.border}` }}>
+                                                <BranchTag branch={story.branch} color={GH.done} />
+                                                <ArrowRight size={11} style={{ color: GH.fgSubtle, flexShrink: 0 }} />
+                                                <BranchTag branch="main" color={GH.success} />
+                                            </div>
+
+                                            {/* URL */}
+                                            {story.url && (
+                                                <div className="flex items-center justify-between rounded-lg px-3 py-2 mb-3"
+                                                    style={{
+                                                        background: GH.accentMuted,
+                                                        border: `1px solid ${GH.accentBorder}`,
+                                                        color: GH.accent,
+                                                    }}>
+                                                    <span className="font-mono text-xs">{story.url}</span>
+                                                    <ExternalLink size={11} />
+                                                </div>
+                                            )}
+
+                                            {/* Actions */}
+                                            <div className="flex flex-col gap-2">
+                                                {story.status === 'idle' && (
+                                                    <>
+                                                        {/* Deploy type toggle */}
+                                                        <div className="flex rounded-lg overflow-hidden"
+                                                            style={{ border: `1px solid ${GH.border}` }}>
+                                                            {[
+                                                                { value: 'efimero', label: 'Efêmero', Icon: Zap },
+                                                                { value: 'tradicional', label: 'Fixo', Icon: Lock },
+                                                            ].map(({ value, label, Icon }, idx) => (
+                                                                <button key={value}
+                                                                    onClick={() => setDeployType(story.id, value)}
+                                                                    className="flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-semibold transition-all"
+                                                                    style={{
+                                                                        background: story.deployType === value ? GH.bgSubtle : 'transparent',
+                                                                        color: story.deployType === value ? GH.fg : GH.fgMuted,
+                                                                        borderRight: idx === 0 ? `1px solid ${GH.border}` : 'none',
+                                                                    }}>
+                                                                    <Icon size={11} />{label}
+                                                                </button>
+                                                            ))}
+                                                        </div>
+                                                        <button onClick={() => deployPreview(story.id)}
+                                                            className="w-full py-2 rounded-lg text-sm font-semibold flex items-center justify-center gap-2 transition-all active:scale-95 hover:brightness-110"
+                                                            style={{
+                                                                background: GH.accentEmphasis,
+                                                                border: `1px solid rgba(240,246,252,0.1)`,
+                                                                color: GH.fgOnEmphasis,
+                                                            }}>
+                                                            <Rocket size={13} /> Subir Infra DEV
+                                                        </button>
+                                                    </>
+                                                )}
+
+                                                {story.status === 'deploying' && (
+                                                    <div className="w-full py-2 rounded-lg text-sm font-semibold text-center animate-shimmer"
+                                                        style={{
+                                                            background: GH.attentionMuted,
+                                                            border: `1px solid ${GH.attentionBorder}`,
+                                                            color: GH.attention,
+                                                        }}>
+                                                        Provisionando ambiente...
+                                                    </div>
+                                                )}
+
+                                                {story.status === 'live' && !story.poApproved && (
+                                                    <button onClick={() => approvePO(story.id)}
+                                                        className="w-full py-2 rounded-lg text-sm font-semibold flex items-center justify-center gap-2 transition-all active:scale-95 hover:brightness-110"
+                                                        style={{
+                                                            background: GH.attentionEmphasis,
+                                                            border: `1px solid rgba(240,246,252,0.1)`,
+                                                            color: GH.fgOnEmphasis,
+                                                        }}>
+                                                        <UserCheck size={13} /> Validar em DEV (PO)
+                                                    </button>
+                                                )}
+
+                                                {story.status === 'live' && (
+                                                    <button
+                                                        onClick={() => story.poApproved && mergeToMain(story.id)}
+                                                        className="w-full py-2 rounded-lg text-sm font-semibold flex items-center justify-center gap-2 transition-all"
+                                                        style={story.poApproved ? {
+                                                            background: GH.dangerEmphasis,
+                                                            border: `1px solid rgba(240,246,252,0.1)`,
+                                                            color: GH.fgOnEmphasis,
+                                                            cursor: 'pointer',
+                                                        } : {
+                                                            background: GH.bgSubtle,
+                                                            border: `1px solid ${GH.border}`,
+                                                            color: GH.fgSubtle,
+                                                            cursor: 'not-allowed',
+                                                        }}>
+                                                        <GitMerge size={13} /> Merge & Destruir Infra DEV
+                                                    </button>
+                                                )}
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+
+                                {stories.length === 0 && (
+                                    <div className="rounded-xl p-8 text-center"
+                                        style={{ background: GH.bgOverlay, border: `1px dashed ${GH.border}` }}>
+                                        <div className="w-10 h-10 rounded-full flex items-center justify-center mx-auto mb-3"
+                                            style={{ background: GH.successMuted, border: `1px solid ${GH.successBorder}` }}>
+                                            <Activity size={18} style={{ color: GH.success }} />
+                                        </div>
+                                        <p className="font-semibold mb-1" style={{ color: GH.fgMuted }}>
+                                            Nenhuma infra DEV ativa.
+                                        </p>
+                                        <p className="text-xs font-semibold" style={{ color: GH.success }}>
+                                            Custos Otimizados ✓
+                                        </p>
                                     </div>
-                                </div>
-                            );
-                        })}
-
-                        {stories.length === 0 && (
-                            <div className="rounded-xl p-8 text-center"
-                                style={{ background: GH.bgOverlay, border: `1px dashed ${GH.border}` }}>
-                                <div className="w-10 h-10 rounded-full flex items-center justify-center mx-auto mb-3"
-                                    style={{ background: GH.successMuted, border: `1px solid ${GH.successBorder}` }}>
-                                    <Activity size={18} style={{ color: GH.success }} />
-                                </div>
-                                <p className="font-semibold mb-1" style={{ color: GH.fgMuted }}>
-                                    Nenhuma infra DEV ativa.
-                                </p>
-                                <p className="text-xs font-semibold" style={{ color: GH.success }}>
-                                    Custos Otimizados ✓
-                                </p>
+                                )}
                             </div>
-                        )}
-                    </div>
+                        </>
+                    ) : (
+                        <>
+                            {/* ══════════════════════════════════════════════ */}
+                            {/* ── MULTI-ENV: LEFT PANEL ──────────────────── */}
+                            {/* ══════════════════════════════════════════════ */}
+
+                            {/* Section header */}
+                            <div className="flex items-center justify-between px-1 pb-1"
+                                style={{ borderBottom: `1px solid ${GH.border}` }}>
+                                <span className="text-xs font-semibold" style={{ color: GH.fgMuted }}>
+                                    Histórias em Progresso
+                                </span>
+                                <Label color="blue" size="xs">◆ Fluxo Enterprise</Label>
+                            </div>
+
+                            {/* Info banner */}
+                            <div className="relative rounded-xl overflow-hidden p-3 flex gap-3 items-center transition-all animate-appear"
+                                style={{ background: GH.accentMuted, border: `1px solid ${GH.accentBorder}` }}>
+                                <div className="absolute top-0 right-0 p-1 opacity-20 pointer-events-none">
+                                    <GitGraph size={64} style={{ color: GH.accent }} />
+                                </div>
+                                <div className="w-10 h-10 rounded-lg flex items-center justify-center shrink-0 z-10"
+                                    style={{ background: GH.bgOverlay, border: `1px solid ${GH.accentBorder}` }}>
+                                    <GitGraph size={18} style={{ color: GH.accent }} />
+                                </div>
+                                <div className="z-10 flex-1">
+                                    <div className="flex items-center gap-1.5 mb-1">
+                                        <span className="text-xs font-bold tracking-wide uppercase" style={{ color: GH.accent }}>Fluxo Multi-Ambiente</span>
+                                    </div>
+                                    <p className="text-[10px] sm:text-xs leading-snug" style={{ color: GH.fg }}>
+                                        <b>Feature:</b> Branch → Feature Env → Teste → HML → Prod<br />
+                                        <b>Bugfix:</b> Branch → Feature Env → Teste → <span style={{ color: GH.danger }}>Prod+HML ⚡</span>
+                                    </p>
+                                </div>
+                            </div>
+
+                            {/* ── MULTI-ENV: Story Cards ── */}
+                            <div className="space-y-3">
+                                {meStories.map(story => {
+                                    const isBugfix = story.type === 'bugfix';
+                                    const steps = isBugfix
+                                        ? ['Branch', 'Feature', 'Teste', 'Prod']
+                                        : ['Branch', 'Feature', 'Teste', 'HML', 'Prod'];
+                                    const stepIdx = getMeStepIndex(story);
+                                    const borderColor = isBugfix ? GH.danger : GH.done;
+                                    const envInfo = meEnvColorMap[story.currentEnv] || meEnvColorMap['dev'];
+
+                                    return (
+                                        <div key={story.id} className="rounded-xl p-4 transition-all duration-300 animate-appear"
+                                            style={{
+                                                background: GH.bgOverlay,
+                                                border: `1px solid ${GH.border}`,
+                                                borderLeft: `3px solid ${borderColor}`,
+                                            }}>
+
+                                            {/* Card header */}
+                                            <div className="flex items-center justify-between mb-2">
+                                                <div className="flex items-center gap-2">
+                                                    <span className="text-xs font-semibold" style={{ color: GH.fgSubtle }}>
+                                                        #{story.id}
+                                                    </span>
+                                                    <Label color={isBugfix ? 'red' : 'purple'} size="xs">
+                                                        {isBugfix ? <><Bug size={9} /> Bugfix</> : <><Zap size={9} /> Feature</>}
+                                                    </Label>
+                                                    <Label color={envInfo.color} size="xs">
+                                                        {envInfo.label}
+                                                    </Label>
+                                                </div>
+                                                <StatusDot status={story.status} />
+                                            </div>
+
+                                            <StepProgress steps={steps} current={stepIdx} />
+
+                                            <h4 className="font-semibold mb-3 leading-snug" style={{ color: GH.fg }}>
+                                                {story.title}
+                                            </h4>
+
+                                            {/* Branch */}
+                                            <div className="flex items-center gap-2 rounded-lg p-2.5 mb-3"
+                                                style={{ background: GH.bgInset, border: `1px solid ${GH.border}` }}>
+                                                <BranchTag branch={story.branch} color={isBugfix ? GH.danger : GH.done} />
+                                            </div>
+
+                                            {/* URL */}
+                                            {story.url && (
+                                                <div className="flex items-center justify-between rounded-lg px-3 py-2 mb-3"
+                                                    style={{
+                                                        background: GH.accentMuted,
+                                                        border: `1px solid ${GH.accentBorder}`,
+                                                        color: GH.accent,
+                                                    }}>
+                                                    <span className="font-mono text-xs truncate">{story.url}</span>
+                                                    <ExternalLink size={11} className="shrink-0 ml-2" />
+                                                </div>
+                                            )}
+
+                                            {/* ── Actions (contextual by env + status) ── */}
+                                            <div className="flex flex-col gap-2">
+
+                                                {/* DEV: Deploy to feature env */}
+                                                {story.currentEnv === 'dev' && story.status === 'idle' && (
+                                                    <button onClick={() => meDeployFeatureEnv(story.id)}
+                                                        className="w-full py-2 rounded-lg text-sm font-semibold flex items-center justify-center gap-2 transition-all active:scale-95 hover:brightness-110"
+                                                        style={{
+                                                            background: GH.accentEmphasis,
+                                                            border: `1px solid rgba(240,246,252,0.1)`,
+                                                            color: GH.fgOnEmphasis,
+                                                        }}>
+                                                        <Rocket size={13} /> Deploy Feature Env
+                                                    </button>
+                                                )}
+
+                                                {/* Deploying spinner */}
+                                                {story.status === 'deploying' && (
+                                                    <div className="w-full py-2 rounded-lg text-sm font-semibold text-center animate-shimmer"
+                                                        style={{
+                                                            background: GH.attentionMuted,
+                                                            border: `1px solid ${GH.attentionBorder}`,
+                                                            color: GH.attention,
+                                                        }}>
+                                                        {story.currentEnv === 'feature-test' && 'Provisionando Feature Env...'}
+                                                        {story.currentEnv === 'test' && 'Atualizando Teste...'}
+                                                        {story.currentEnv === 'hml' && 'Atualizando HML...'}
+                                                        {story.currentEnv === 'prod' && 'Deployando em Produção...'}
+                                                        {story.currentEnv === 'dev' && 'Provisionando...'}
+                                                    </div>
+                                                )}
+
+                                                {/* FEATURE-TEST: Approve tester */}
+                                                {story.currentEnv === 'feature-test' && story.status === 'live' && !story.featureTestApproved && (
+                                                    <button onClick={() => meApproveFeatureTest(story.id)}
+                                                        className="w-full py-2 rounded-lg text-sm font-semibold flex items-center justify-center gap-2 transition-all active:scale-95 hover:brightness-110"
+                                                        style={{
+                                                            background: GH.attentionEmphasis,
+                                                            border: `1px solid rgba(240,246,252,0.1)`,
+                                                            color: GH.fgOnEmphasis,
+                                                        }}>
+                                                        <UserCheck size={13} /> Aprovar Teste (Feature Env)
+                                                    </button>
+                                                )}
+
+                                                {/* FEATURE-TEST: Send to test env */}
+                                                {story.currentEnv === 'feature-test' && story.status === 'live' && story.featureTestApproved && (
+                                                    <button onClick={() => meSendToTest(story.id)}
+                                                        className="w-full py-2 rounded-lg text-sm font-semibold flex items-center justify-center gap-2 transition-all active:scale-95 hover:brightness-110"
+                                                        style={{
+                                                            background: GH.accentEmphasis,
+                                                            border: `1px solid rgba(240,246,252,0.1)`,
+                                                            color: GH.fgOnEmphasis,
+                                                        }}>
+                                                        <ArrowRight size={13} /> Enviar p/ Teste
+                                                    </button>
+                                                )}
+
+                                                {/* TEST: Approve tester */}
+                                                {story.currentEnv === 'test' && story.status === 'live' && !story.testApproved && (
+                                                    <button onClick={() => meApproveTest(story.id)}
+                                                        className="w-full py-2 rounded-lg text-sm font-semibold flex items-center justify-center gap-2 transition-all active:scale-95 hover:brightness-110"
+                                                        style={{
+                                                            background: GH.attentionEmphasis,
+                                                            border: `1px solid rgba(240,246,252,0.1)`,
+                                                            color: GH.fgOnEmphasis,
+                                                        }}>
+                                                        <UserCheck size={13} /> Aprovar Teste (Integrado)
+                                                    </button>
+                                                )}
+
+                                                {/* TEST APPROVED: Feature → HML */}
+                                                {story.currentEnv === 'test' && story.status === 'live' && story.testApproved && story.type === 'feature' && (
+                                                    <button onClick={() => meSendToHml(story.id)}
+                                                        className="w-full py-2 rounded-lg text-sm font-semibold flex items-center justify-center gap-2 transition-all active:scale-95 hover:brightness-110"
+                                                        style={{
+                                                            background: GH.accentEmphasis,
+                                                            border: `1px solid rgba(240,246,252,0.1)`,
+                                                            color: GH.fgOnEmphasis,
+                                                        }}>
+                                                        <ArrowRight size={13} /> Enviar p/ HML
+                                                    </button>
+                                                )}
+
+                                                {/* TEST APPROVED: Bugfix → Fast-track Prod + HML */}
+                                                {story.currentEnv === 'test' && story.status === 'live' && story.testApproved && story.type === 'bugfix' && (
+                                                    <button onClick={() => meDeployToProd(story.id, true)}
+                                                        className="w-full py-2 rounded-lg text-sm font-semibold flex items-center justify-center gap-2 transition-all active:scale-95 hover:brightness-110"
+                                                        style={{
+                                                            background: GH.dangerEmphasis,
+                                                            border: `1px solid rgba(240,246,252,0.1)`,
+                                                            color: GH.fgOnEmphasis,
+                                                            boxShadow: `0 0 12px ${GH.danger}30`,
+                                                        }}>
+                                                        <Zap size={13} /> Fast-Track: Prod + HML
+                                                    </button>
+                                                )}
+
+                                                {/* HML: Deploy to Prod */}
+                                                {story.currentEnv === 'hml' && story.status === 'live' && (
+                                                    <button onClick={() => meDeployToProd(story.id)}
+                                                        className="w-full py-2 rounded-lg text-sm font-semibold flex items-center justify-center gap-2 transition-all active:scale-95 hover:brightness-110"
+                                                        style={{
+                                                            background: GH.successEmphasis,
+                                                            border: `1px solid rgba(240,246,252,0.1)`,
+                                                            color: GH.fgOnEmphasis,
+                                                        }}>
+                                                        <Rocket size={13} /> Deploy Produção (Janela)
+                                                    </button>
+                                                )}
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+
+                                {meStories.length === 0 && (
+                                    <div className="rounded-xl p-8 text-center"
+                                        style={{ background: GH.bgOverlay, border: `1px dashed ${GH.border}` }}>
+                                        <div className="w-10 h-10 rounded-full flex items-center justify-center mx-auto mb-3"
+                                            style={{ background: GH.successMuted, border: `1px solid ${GH.successBorder}` }}>
+                                            <Activity size={18} style={{ color: GH.success }} />
+                                        </div>
+                                        <p className="font-semibold mb-1" style={{ color: GH.fgMuted }}>
+                                            Nenhuma história em andamento.
+                                        </p>
+                                        <p className="text-xs" style={{ color: GH.fgSubtle }}>
+                                            Crie uma Feature ou Bugfix para simular o fluxo.
+                                        </p>
+                                    </div>
+                                )}
+                            </div>
+                        </>
+                    )}
                 </div>
 
-                {/* ── RIGHT ── */}
+                {/* ══════════════════════════════════════════════ */}
+                {/* ── RIGHT PANEL ────────────────────────────── */}
+                {/* ══════════════════════════════════════════════ */}
                 <div className="lg:col-span-8 flex flex-col gap-5">
 
-                    {/* GitOps Insight — GitHub alert style */}
+                    {/* ── GitOps Insight (shared layout, scenario-aware data) ── */}
                     <div className="rounded-xl overflow-hidden"
                         style={{
                             background: GH.bgOverlay,
@@ -676,10 +1222,10 @@ const App = () => {
                         <div className="p-5 flex flex-col md:flex-row gap-5">
                             <div className="flex-1">
                                 <h3 className="font-bold text-base mb-2" style={{ color: GH.fg }}>
-                                    {explanation.title}
+                                    {currentExplanation.title}
                                 </h3>
                                 <p className="text-sm leading-relaxed" style={{ color: GH.fgMuted }}>
-                                    {explanation.tech}
+                                    {currentExplanation.tech}
                                 </p>
                             </div>
 
@@ -699,89 +1245,193 @@ const App = () => {
                                 <div className="p-4 flex-1">
                                     <pre className="text-xs font-mono leading-relaxed whitespace-pre-wrap"
                                         style={{ color: GH.success }}>
-                                        {explanation.cmd}
+                                        {currentExplanation.cmd}
                                     </pre>
                                 </div>
                             </div>
                         </div>
                     </div>
 
-                    {/* Production Pipeline */}
-                    <div className="rounded-xl overflow-x-auto"
-                        style={{
-                            background: GH.bgOverlay,
-                            border: `1px solid ${GH.border}`,
-                        }}>
-                        {/* Pipeline header */}
-                        <div className="flex items-center justify-between px-5 py-3 min-w-[680px]"
-                            style={{ borderBottom: `1px solid ${GH.border}` }}>
-                            <div className="flex items-center gap-2">
-                                <Activity size={14} style={{ color: GH.accent }} />
-                                <span className="font-semibold text-sm" style={{ color: GH.fg }}>
-                                    A Linha de Produção
-                                </span>
+                    {/* ── Production Pipeline (scenario-specific) ── */}
+                    {activeScenario === 'zero-dev' ? (
+                        /* ── ZERO-DEV PIPELINE ── */
+                        <div className="rounded-xl overflow-x-auto"
+                            style={{
+                                background: GH.bgOverlay,
+                                border: `1px solid ${GH.border}`,
+                            }}>
+                            {/* Pipeline header */}
+                            <div className="flex items-center justify-between px-5 py-3 min-w-[680px]"
+                                style={{ borderBottom: `1px solid ${GH.border}` }}>
+                                <div className="flex items-center gap-2">
+                                    <Activity size={14} style={{ color: GH.accent }} />
+                                    <span className="font-semibold text-sm" style={{ color: GH.fg }}>
+                                        A Linha de Produção
+                                    </span>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <span className="relative inline-flex w-2 h-2">
+                                        <span className="w-2 h-2 rounded-full animate-pulse"
+                                            style={{ background: GH.success, boxShadow: `0 0 6px ${GH.success}` }} />
+                                    </span>
+                                    <span className="text-xs font-semibold" style={{ color: GH.success }}>Fluxo Ativo</span>
+                                </div>
                             </div>
-                            <div className="flex items-center gap-2">
-                                <span className="relative inline-flex w-2 h-2">
-                                    <span className="w-2 h-2 rounded-full animate-pulse"
-                                        style={{ background: GH.success, boxShadow: `0 0 6px ${GH.success}` }} />
-                                </span>
-                                <span className="text-xs font-semibold" style={{ color: GH.success }}>Fluxo Ativo</span>
-                            </div>
-                        </div>
 
-                        <div className="p-5">
-                            <div className="flex flex-col md:flex-row items-stretch gap-3 min-w-[680px]">
-                                {/* Git Repo node */}
-                                <div className="flex-1 rounded-xl p-4 flex flex-col justify-between transition-all duration-500"
-                                    style={{
-                                        background: GH.bgInset,
-                                        border: `1px solid ${mainRepo.pendingRelease ? GH.accentBorder : GH.border}`,
-                                        boxShadow: mainRepo.pendingRelease ? `0 0 16px rgba(56,139,253,0.15)` : 'none',
-                                    }}>
-                                    <div className="flex items-center justify-between mb-3">
-                                        <Label color="default">
-                                            <GitGraph size={10} /> GIT REPO
-                                        </Label>
-                                        {mainRepo.pendingRelease && (
-                                            <Label color="blue" size="xs">
-                                                <Tag size={8} /> RC pronto
+                            <div className="p-5">
+                                <div className="flex flex-col md:flex-row items-stretch gap-3 min-w-[680px]">
+                                    {/* Git Repo node */}
+                                    <div className="flex-1 rounded-xl p-4 flex flex-col justify-between transition-all duration-500"
+                                        style={{
+                                            background: GH.bgInset,
+                                            border: `1px solid ${mainRepo.pendingRelease ? GH.accentBorder : GH.border}`,
+                                            boxShadow: mainRepo.pendingRelease ? `0 0 16px rgba(56,139,253,0.15)` : 'none',
+                                        }}>
+                                        <div className="flex items-center justify-between mb-3">
+                                            <Label color="default">
+                                                <GitGraph size={10} /> GIT REPO
                                             </Label>
-                                        )}
+                                            {mainRepo.pendingRelease && (
+                                                <Label color="blue" size="xs">
+                                                    <Tag size={8} /> RC pronto
+                                                </Label>
+                                            )}
+                                        </div>
+                                        <div>
+                                            <div className="font-mono font-bold text-lg mb-1 truncate" style={{ color: GH.fg }}>
+                                                {mainRepo.commit}
+                                            </div>
+                                            <div className="text-xs font-semibold mb-0.5" style={{ color: GH.accent }}>
+                                                Branch: main (Tronco)
+                                            </div>
+                                            <div className="text-xs" style={{ color: GH.fgSubtle }}>
+                                                Recebeu merge. Sem infra fixa.
+                                            </div>
+                                        </div>
                                     </div>
-                                    <div>
-                                        <div className="font-mono font-bold text-lg mb-1 truncate" style={{ color: GH.fg }}>
-                                            {mainRepo.commit}
-                                        </div>
-                                        <div className="text-xs font-semibold mb-0.5" style={{ color: GH.accent }}>
-                                            Branch: main (Tronco)
-                                        </div>
-                                        <div className="text-xs" style={{ color: GH.fgSubtle }}>
-                                            Recebeu merge. Sem infra fixa.
-                                        </div>
+
+                                    <PipelineConnector onClick={createPreRelease} disabled={!mainRepo.pendingRelease}
+                                        label="Gerar RC" sub="Pre-release" color="blue" />
+
+                                    <div className="flex-1">
+                                        <EnvBox label="INFRA: HML" data={environments.hml} color="amber"
+                                            branchName="Branch: main (Tag RC)" />
                                     </div>
-                                </div>
 
-                                <PipelineConnector onClick={createPreRelease} disabled={!mainRepo.pendingRelease}
-                                    label="Gerar RC" sub="Pre-release" color="blue" />
+                                    <PipelineConnector onClick={promoteToProd} disabled={!canPromote}
+                                        label="Aprovar" sub="Release PROD" color="green" />
 
-                                <div className="flex-1">
-                                    <EnvBox label="INFRA: HML" data={environments.hml} color="amber"
-                                        branchName="Branch: main (Tag RC)" />
-                                </div>
-
-                                <PipelineConnector onClick={promoteToProd} disabled={!canPromote}
-                                    label="Aprovar" sub="Release PROD" color="green" />
-
-                                <div className="flex-1">
-                                    <EnvBox label="INFRA: PROD" data={environments.prod} color="red"
-                                        branchName="Branch: main (Tag Release)" />
+                                    <div className="flex-1">
+                                        <EnvBox label="INFRA: PROD" data={environments.prod} color="red"
+                                            branchName="Branch: main (Tag Release)" />
+                                    </div>
                                 </div>
                             </div>
                         </div>
-                    </div>
+                    ) : (
+                        /* ── MULTI-ENV PIPELINE ── */
+                        <div className="rounded-xl overflow-x-auto"
+                            style={{
+                                background: GH.bgOverlay,
+                                border: `1px solid ${GH.border}`,
+                            }}>
+                            {/* Pipeline header */}
+                            <div className="flex items-center justify-between px-5 py-3 min-w-[680px]"
+                                style={{ borderBottom: `1px solid ${GH.border}` }}>
+                                <div className="flex items-center gap-2">
+                                    <Activity size={14} style={{ color: GH.accent }} />
+                                    <span className="font-semibold text-sm" style={{ color: GH.fg }}>
+                                        Pipeline de Ambientes
+                                    </span>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <span className="relative inline-flex w-2 h-2">
+                                        <span className="w-2 h-2 rounded-full animate-pulse"
+                                            style={{ background: GH.success, boxShadow: `0 0 6px ${GH.success}` }} />
+                                    </span>
+                                    <span className="text-xs font-semibold" style={{ color: GH.success }}>Fluxo Ativo</span>
+                                </div>
+                            </div>
 
-                    {/* System Log Terminal */}
+                            <div className="p-5">
+                                <div className="flex flex-col md:flex-row items-stretch gap-2 min-w-[680px]">
+
+                                    {/* Feature Envs Node */}
+                                    <div className="flex-1 rounded-xl p-4 flex flex-col justify-between transition-all duration-500 relative overflow-hidden"
+                                        style={{
+                                            background: GH.bgOverlay,
+                                            border: `1px solid ${activeFeatureEnvs.length > 0 ? GH.doneBorder : GH.border}`,
+                                            boxShadow: activeFeatureEnvs.length > 0 ? `0 0 12px ${GH.done}15` : 'none',
+                                        }}>
+                                        <div className="flex items-center justify-between mb-3">
+                                            <span className="inline-flex items-center gap-1.5 text-xs font-bold px-2.5 py-1 rounded-full"
+                                                style={{ background: GH.doneMuted, border: `1px solid ${GH.doneBorder}`, color: GH.done }}>
+                                                <Server size={11} />FEATURE ENVS
+                                            </span>
+                                            <span className="text-xs font-bold" style={{ color: activeFeatureEnvs.length > 0 ? GH.done : GH.fgSubtle }}>
+                                                {activeFeatureEnvs.length} ativo{activeFeatureEnvs.length !== 1 ? 's' : ''}
+                                            </span>
+                                        </div>
+                                        <div className="space-y-1.5">
+                                            {activeFeatureEnvs.length > 0 ? activeFeatureEnvs.map(s => (
+                                                <div key={s.id} className="flex items-center gap-1.5 text-xs font-mono truncate" style={{ color: GH.fgMuted }}>
+                                                    <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: GH.done }} />
+                                                    <span className="truncate">{s.url}</span>
+                                                </div>
+                                            )) : (
+                                                <div className="text-xs" style={{ color: GH.fgSubtle }}>
+                                                    Nenhum ambiente de feature ativo
+                                                </div>
+                                            )}
+                                        </div>
+                                        <div className="text-xs mt-2" style={{ color: GH.fgSubtle }}>
+                                            *.dev-tia.bealiant.dev
+                                        </div>
+                                    </div>
+
+                                    <PipelineArrow />
+
+                                    {/* Test Env */}
+                                    <div className="flex-1">
+                                        <EnvBox label="TESTE" data={meEnvironments.test} color="blue"
+                                            branchName="test.dev-tia.bealiant.dev" />
+                                    </div>
+
+                                    <PipelineArrow />
+
+                                    {/* HML Env */}
+                                    <div className="flex-1">
+                                        <EnvBox label="HML" data={meEnvironments.hml} color="amber"
+                                            branchName="hml.dev-tia.bealiant.dev" />
+                                    </div>
+
+                                    <PipelineArrow />
+
+                                    {/* Prod Env */}
+                                    <div className="flex-1">
+                                        <EnvBox label="PROD" data={meEnvironments.prod} color="green"
+                                            branchName="app.bealiant.dev" />
+                                    </div>
+                                </div>
+
+                                {/* Bugfix fast-track annotation */}
+                                <div className="mt-4 flex items-center gap-3 rounded-lg px-4 py-2.5"
+                                    style={{ background: GH.dangerMuted, border: `1px solid ${GH.dangerBorder}` }}>
+                                    <Zap size={14} style={{ color: GH.danger }} />
+                                    <div>
+                                        <span className="text-xs font-bold" style={{ color: GH.danger }}>
+                                            Bugfix Fast-Track:
+                                        </span>
+                                        <span className="text-xs ml-1" style={{ color: GH.fgMuted }}>
+                                            Teste → Prod + HML (direto, sem esperar janela de deploy)
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* ── System Log Terminal (shared layout, scenario-aware data) ── */}
                     <div className="rounded-xl overflow-hidden"
                         style={{ background: GH.bgInset, border: `1px solid ${GH.border}` }}>
                         {/* Titlebar */}
@@ -801,7 +1451,7 @@ const App = () => {
                         </div>
 
                         <div className="p-4 h-36 overflow-y-auto terminal-scroll space-y-1.5 font-mono">
-                            {logs.length === 0 && (
+                            {currentLogs.length === 0 && (
                                 <div className="flex items-start gap-2 text-xs">
                                     <span style={{ color: GH.fgSubtle }}>$</span>
                                     <span style={{ color: GH.fgSubtle }}>
@@ -810,7 +1460,7 @@ const App = () => {
                                     </span>
                                 </div>
                             )}
-                            {logs.map((log, i) => (
+                            {currentLogs.map((log, i) => (
                                 <div key={i} className="flex items-start gap-2 text-xs leading-relaxed">
                                     <span className="shrink-0 font-bold select-none"
                                         style={{ color: i === 0 ? GH.success : GH.fgSubtle }}>$</span>
